@@ -1,0 +1,21 @@
++ VC CP1 - VC CP1
++ VR RP1 - VR RP1
++ VC CP2 - VC CP2
++ VR RP2 - VR RP2
++ VC CB  - VC CB
++ VR RB  - VR RB
++ VC CD  - VC CD
++ VR RD  - VR RD
++ VC CN  - VC CN
++ VR RN  - VR RN
++ MM F   - MM F
++ MM FT  - MM FT
++ MM M   - MM M
++ MM MT  - MM MT
++ VC CN  - VC CB + VC CD
++ VR RN  - VR RB + VR RD
++ MM M   - MM FT + MM F
++ MM MT  - MM F  + MM FT
++ VC CP2 - VC CP1 - VC CN - SR M
++ VR RP2 - VR RP1 - VR RN - SC MT
++ MM M   + MM MT
