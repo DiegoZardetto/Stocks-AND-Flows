@@ -150,12 +150,15 @@
     true.constr.i <- sort(unique(as.numeric(constr.pos.obj[constr.pos.obj>0])))
     n.true.constr <- length(true.constr.i)
 
+    # Text of actual constraints (no declarations)
+	true.v.constr <- if (skip.decl) v.constr[is.true.constr] else v.constr[true.constr.i]
+
   # If requested stop timing
   if (Time) Tstop <- proc.time()
 
   # Build output list (must consider the opportunity of defining a class...)
   BalConstr <- list(
-                     v.constr = v.constr,                     # currently unused
+                     v.constr = v.constr,                     # serves functions Balance() and check.ZeroVarConstr()
                      sgn.mat = sgn.mat,
                      op.mat = op.mat,                         # currently unused
                      op.code.mat = op.code.mat,
@@ -164,7 +167,9 @@
                      obj.pos.mat = obj.pos.mat,
                      constr.pos.obj = constr.pos.obj,
                      sgn.pos.obj = sgn.pos.obj,
-                     true.constr.i = true.constr.i
+                     true.constr.i = true.constr.i,
+                     true.v.constr = true.v.constr,           # serves functions Balance() and check.ZeroVarConstr()
+                     skip.decl = skip.decl                    # serves functions Balance() and check.ZeroVarConstr()
                     )
 
   if (Time) attr(BalConstr, "time") <- (Tstop - Tstart)
@@ -389,9 +394,10 @@ if (all(ok.constr)){
 cumvar <- ConstrCumVar(BalConstr, BalObjV, must.set = FALSE)
 ko.var.constr <- mapply(function(m, v) any( (abs(m) > tol) & (v <= 0) ), misfit, cumvar)
 if (any(ko.var.constr)){
-     warning("Zero variance estimates found in the following failed (macro) constraints: ",
-          paste(which(ko.var.constr), collapse = ", "), 
-          ".\n  > REMARK: Balancing might not converge or residual discrepancies might exist for balanced estimates!\n\n", 
+     Text.ko.var.constr <- if (BalConstr$skip.decl) BalConstr$true.v.constr[ko.var.constr] else BalConstr$v.constr[ko.var.constr]
+     warning("Estimates with zero *cumulative* variance found in the following failed (macro) constraints:\n  ",
+          paste(Text.ko.var.constr, collapse = "\n  "), 
+          "\n\n  REMARK: Balance might not converge and residual discrepancies will exist for balanced estimates!\n\n", 
           immediate. = TRUE)
     }
 
@@ -637,6 +643,58 @@ BalObjQ
     }
   else {
       stop("Both input objects (a and b) must be matrices!\n\n")
+    }
+}
+
+
+`check.ZeroVarConstr` <- function(BalConstr, BalObj, BalObjV, tol = 1E-7, verbose = TRUE, ...){
+###########################################################################
+# In case broken constraints exist that involve only unalterable objects, #
+# i.e. zero variance estimates, report on them. These constraints cannot  #
+# possibly be fixed by the balancing algorithm!                           #
+#                                                                         #
+# NOTE: The array indices of all atomic constraints involved in detected  #
+#       pathological macro constraints are returned.                      #
+#                                                                         #
+# NOTE: This pathology is signaled by a warning massage when executing    #
+#       main function Balance().                                          #
+###########################################################################
+
+BalObj  <- set.BalObj(BalObj,  BalConstr)
+BalObjV <- set.BalObj(BalObjV, BalConstr)
+
+# Check that objects actually need to be modified
+misfit <- ConstrMisfit(BalConstr, BalObj, must.set = FALSE)
+ok.constr <- sapply(misfit, function(m) max(abs(m)) < tol)
+if (all(ok.constr)){
+     cat("All balancing constraints (", nrow(BalConstr$obj.pos.mat),") fulfilled (at tolerance level tol = ",
+            tol, ").\n\n",sep="")
+     return(invisible(NULL))
+    }
+
+# Check if one can actually modify what needs to be
+cumvar <- ConstrCumVar(BalConstr, BalObjV, must.set = FALSE)
+
+ko.var.constr <- mapply(function(m, v) any( (abs(m) > tol) & (v <= 0) ), misfit, cumvar)
+
+if (!any(ko.var.constr)){
+     cat("No failed balancing constraints involve zero *cumulative* variance estimates.\n\n",sep="")
+     return(invisible(NULL))
+    } else {
+     Text.ko.var.constr <- if (BalConstr$skip.decl) BalConstr$true.v.constr[ko.var.constr] else BalConstr$v.constr[ko.var.constr]
+     cat("Estimates with zero *cumulative* variance found in the following failed (macro) constraints:\n  ",
+         paste(Text.ko.var.constr, collapse = "\n  "), 
+         "\n\nREMARK: Residual discrepancies will exist for balanced estimates or balancing algorithm might not converge!\n\n", sep = "")
+
+     atom.ko.var.constr <- mapply(function(m, v) which( (abs(m) > tol) & (v <= 0) , arr.ind = TRUE),
+                                  misfit[ko.var.constr], cumvar[ko.var.constr], SIMPLIFY = FALSE)
+
+     if (verbose) {
+         cat("Array indices of involed atomic constraints:\n\n")
+         print(atom.ko.var.constr)
+        }
+
+     return(invisible(atom.ko.var.constr))
     }
 }
 
