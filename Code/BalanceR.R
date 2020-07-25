@@ -394,10 +394,18 @@ if (all(ok.constr)){
 cumvar <- ConstrCumVar(BalConstr, BalObjV, must.set = FALSE)
 ko.var.constr <- mapply(function(m, v) any( (abs(m) > tol) & (v <= 0) ), misfit, cumvar)
 if (any(ko.var.constr)){
+     # Text of involved macro constraints
      Text.ko.var.constr <- if (BalConstr$skip.decl) BalConstr$true.v.constr[ko.var.constr] else BalConstr$v.constr[ko.var.constr]
+     # Array indices of involved atomic constraints
+     atom.ko.var.constr <- mapply(function(m, v) which( (abs(m) > tol) & (v <= 0) , arr.ind = TRUE),
+                                  misfit[ko.var.constr], cumvar[ko.var.constr], SIMPLIFY = FALSE)
+
+     n.atom.ko.var.constr <- sum(sapply(atom.ko.var.constr, FUN = function(arr.ind) NROW(arr.ind)))
+     # Number of involved atomic constraints
      warning("Estimates with zero *cumulative* variance found in the following failed (macro) constraints:\n  ",
           paste(Text.ko.var.constr, collapse = "\n  "), 
-          "\n\n  REMARK: Balance might not converge and residual discrepancies will exist for balanced estimates!\n\n", 
+          "\n\n  NOTE:   This issue affects ", n.atom.ko.var.constr, " atomic constraints.",
+          "\n  REMARK: Balance might not converge or residual discrepancies will exist for balanced estimates!\n\n", 
           immediate. = TRUE)
     }
 
@@ -681,13 +689,19 @@ if (!any(ko.var.constr)){
      cat("No failed balancing constraints involve zero *cumulative* variance estimates.\n\n",sep="")
      return(invisible(NULL))
     } else {
+     # Text of involved macro constraints
      Text.ko.var.constr <- if (BalConstr$skip.decl) BalConstr$true.v.constr[ko.var.constr] else BalConstr$v.constr[ko.var.constr]
-     cat("Estimates with zero *cumulative* variance found in the following failed (macro) constraints:\n  ",
-         paste(Text.ko.var.constr, collapse = "\n  "), 
-         "\n\nREMARK: Residual discrepancies will exist for balanced estimates or balancing algorithm might not converge!\n\n", sep = "")
-
+     # Array indices of involved atomic constraints
      atom.ko.var.constr <- mapply(function(m, v) which( (abs(m) > tol) & (v <= 0) , arr.ind = TRUE),
                                   misfit[ko.var.constr], cumvar[ko.var.constr], SIMPLIFY = FALSE)
+     # Number of involved atomic constraints
+     n.atom.ko.var.constr <- sum(sapply(atom.ko.var.constr, FUN = function(arr.ind) NROW(arr.ind)))
+
+     cat("Estimates with zero *cumulative* variance found in the following failed (macro) constraints:\n  ",
+         paste(Text.ko.var.constr, collapse = "\n  "), 
+         "\n\nNOTE:   This issue affects ", n.atom.ko.var.constr, " atomic constraints.",
+         "\nREMARK: Residual discrepancies will exist for balanced estimates or balancing algorithm might not converge!\n\n",
+         sep = "")
 
      if (verbose) {
          cat("Array indices of involed atomic constraints:\n\n")
