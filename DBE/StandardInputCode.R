@@ -16,7 +16,7 @@
   stockSchema <- names(stockClasses)[stockClasses == "factor"]
 
   # First read the data, then prepare it
-  P <- read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = stockClasses, ...)
+  P <- suppressWarnings(read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = stockClasses, ...))
 
   # If there are unknown variables, raise an error
   unknown.vars <- names(P)[!(names(P) %in% names(stockClasses))]
@@ -76,13 +76,17 @@
 #                                                                           #
 # NOTE: STOCK must be an already prepared POPULATION COUNTS object.         #
 #       It serves the purpose to guarantee stocks-flows FORMAT consistency. #
+#                                                                           #
+# REMARK: This function may *and should* be used to read T2 (T1) POPULATION #
+#         COUNTS while using for argument STOCK already prepared T1 (T2)    #
+#         POPULATION COUNTS. This would ensure P1 <-> P2 congruence!        #
 #############################################################################
   # Set the MAXIMAL schema for POPULATION STOCKS
   stockClasses <- c("Sex" = "factor", "Nation" = "factor", "AgeCl" = "factor", "Region" = "factor", "N" = "numeric")
   stockSchema <- names(stockClasses)[stockClasses == "factor"]
 
   # First read the data, then prepare it
-  BDN <- read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = stockClasses, ...)
+  BDN <- suppressWarnings(read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = stockClasses, ...))
 
   # If there are unknown variables, raise an error
   unknown.vars <- names(BDN)[!(names(BDN) %in% names(stockClasses))]
@@ -105,9 +109,26 @@
      BDN$AgeCl <- relevel(BDN$AgeCl, "N")
     }
 
-  # Tidy up the levels of stockSchema's factors
+#  # Tidy up the levels of stockSchema's factors
+#  for (fact in stockSchema) {
+#     BDN[[fact]] <- factor(BDN[[fact]], levels = tidyLevels(BDN[[fact]]))
+#    }
+
+  # Tidy up the levels of stockSchema's factors. Try ensure the congruence
+  # of BIRTHS / DEATHS / NATURAL INCREASE matrices with STOCKS matrices
+  # NOTE: Code below implies that:
+  #       (i)  factor combinations that are possibly *absent* in input will
+  #            appear as zero frequency cells *present* in output object BDN,
+  #            which is *correct*.
+  #       (ii) factor combinations that are *present* in input but possibly *absent*
+  #            in STOCK would appear as *extra rows* in output object BDN,
+  #            which triggers a *preventive informative error message*.
   for (fact in stockSchema) {
-     BDN[[fact]] <- factor(BDN[[fact]], levels = tidyLevels(BDN[[fact]]))
+     BDN[[fact]] <- factor(BDN[[fact]], levels = levels(STOCK[[fact]]))
+     if (anyNA(BDN[[fact]])) {
+         stop("Found NA values in input BIRTHS / DEATHS / NATURAL INCREASE file's factor: ", fact,
+              "\n  NOTE: This might indicate that the input file involves levels which are absent in STOCK!")
+        }
     }
 
   # Get from STOCK the stockSchemaRows, i.e. ALL the needed rows including empty levels
@@ -125,32 +146,42 @@
   # IF NEEDED, put to 0 all the counts when AgeCl1 = 'N' or Region1 = 'E'
   BDN$N[is.na(BDN$N)] <- 0
 
+  # Check for possible dimension mismatches between BDN output and input STOCK matrix
+  # NOTE: This error should *never* pop-up, as it should have already been catched above,
+  #       when tidying up flowSchema's factors
+  if ( NROW(STOCK) != NROW(BDN) ) {
+     stop("Number of rows of BIRTHS / DEATHS / NATURAL INCREASE matrix (", NROW(BDN), ") does not agree with STOCK's one (", NROW(STOCK), ")!")
+    }
+
   # Return the prepared object
   return(BDN)
 }
 
 
 `read.F` <- function(file = if (interactive()) choose.files(caption = "Select MIGRATION FLOWS file", multi = FALSE, filters = Filters["All", ]),
-                     sep = ";", dec = '.', ...) {
-##########################################################################
-# Read input MIGRATION FLOWS from external files and prepare them.       #
-#                                                                        #
-# NOTE: Input data are assumed to comply with the STANDARD INPUT FORMAT. #
-#                                                                        #
-# NOTE: The prepared output has a STANDARD ORDERING of rows and columns. #
-##########################################################################
+                     sep = ";", dec = '.', STOCK, ...) {
+#############################################################################
+# Read input MIGRATION FLOWS from external files and prepare them.          #
+#                                                                           #
+# NOTE: Input data are assumed to comply with the STANDARD INPUT FORMAT.    #
+#                                                                           #
+# NOTE: The prepared output has a STANDARD ORDERING of rows and columns.    #
+#                                                                           #
+# NOTE: STOCK must be an already prepared POPULATION COUNTS object.         #
+#       It serves the purpose to guarantee stocks-flows FORMAT consistency. #
+#############################################################################
   # Set the MAXIMAL schema for MIGRATION FLOWS
   flowClasses <- c("Sex1" = "factor", "Nation1" = "factor", "AgeCl1" = "factor", "Region1" = "factor",
                    "Sex2" = "factor", "Nation2" = "factor", "AgeCl2" = "factor", "Region2" = "factor", "N" = "numeric")  
   flowSchema <- names(flowClasses)[flowClasses == "factor"]
 
   # First read the data, then prepare it
-  Fin <- read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = flowClasses, ...)
+  Fin <- suppressWarnings(read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = flowClasses, ...))
 
   # If there are unknown variables, raise an error
   unknown.vars <- names(Fin)[!(names(Fin) %in% names(flowClasses))]
   if (length(unknown.vars) > 0) {
-     stop("Unknown variables in MIGRATION FLOWS file: ", paste(unknown.vars, collapse = ", "), ".\n They will be dropped!")
+     stop("Unknown variables in MIGRATION FLOWS file: ", paste(unknown.vars, collapse = ", "), ".\n")
     }
 
   # Reduce the flowSchema to the REALIZED one
@@ -171,9 +202,26 @@
      Fin$AgeCl2 <- relevel(Fin$AgeCl2, "N")
     }
 
-  # Tidy up the levels of flowSchema's factors
+#  # Tidy up the levels of flowSchema's factors
+#  for (fact in flowSchema) {
+#     Fin[[fact]] <- factor(Fin[[fact]], levels = tidyLevels(Fin[[fact]]))
+#    }
+
+  # Tidy up the levels of flowSchema's factors. Try ensure the congruence
+  # of FLOWS matrices with STOCKS matrices
+  # NOTE: Code below implies that:
+  #       (i)  factor combinations that are possibly *absent* in Fin will appear
+  #            as zero frequency cells *present* in output ftable object F, which
+  #            is *correct*.
+  #       (ii) factor combinations that are *present* in Fin but possibly *absent*
+  #            in STOCK would appear as *extra rows/cols* in output ftable object F,
+  #            which triggers a *preventive informative error message*.
   for (fact in flowSchema) {
-     Fin[[fact]] <- factor(Fin[[fact]], levels = tidyLevels(Fin[[fact]]))
+     Fin[[fact]] <- factor(Fin[[fact]], levels = levels(STOCK[[substr(fact, 1, nchar(fact) - 1)]]))
+     if (anyNA(Fin[[fact]])) {
+         stop("Found NA values in input FLOWS file's factor: ", fact,
+              "\n  NOTE: This might indicate that FLOWS file involves levels which are absent in STOCK!")
+        }
     }
 
   # Expand the migration flows table using the count column 'N' in order to later
@@ -184,7 +232,15 @@
   # REMARK: ftable() creates combinations of factor levels in such a way that the levels
   #         of the left-most variable vary the slowest. THIS MATCHES THE STANDARD ORDER
   #         created by functions read.P() and read.BDN().
-  F <- ftable(FFin, row.vars = names(FFin)[endsWith(names(FFin), "1")], col.vars = names(FFin)[endsWith(names(FFin), "2")])
+  F <- ftable(FFin, row.vars = names(FFin)[endsWith(names(FFin), "1")],
+                    col.vars = names(FFin)[endsWith(names(FFin), "2")], exclude = NULL)
+
+  # Check for possible dimension mismatches between FLOWS output ftable and input STOCK matrix
+  # NOTE: This error should *never* pop-up, as it should have already been catched above,
+  #       when tidying up flowSchema's factors
+  if ( ( NROW(STOCK) != NROW(F) ) ||  ( NROW(STOCK) != NCOL(F) ) ) {
+     stop("FLOW matrix dimension (", NROW(F)," X ", NCOL(F), ") does not agree with STOCK's rows (", NROW(STOCK), ")!")
+    }
 
   # Return the prepared object
   return(F)
@@ -296,7 +352,7 @@
 }
 
 
-`mkCheck` <- function(F, Cmask) {
+`mkCheck` <- function(F, Cmask, verbose = TRUE) {
 ################################################
 # CHECK that Migration Flows data are FEASIBLE #
 ################################################
@@ -310,16 +366,17 @@
       cat("\n##\n")
 
       TEST.df <- as.data.frame(TEST)
-      print(TEST.df[TEST.df$Freq > 0, ])
-
-      cat("\n")
-      print(TEST, zero.print = ".")
+      out <- TEST.df[TEST.df$Freq > 0, ]
+      if (verbose) print(out)
     }
   else {
       cat("\n##")
       cat("\n## WELL FORMED migration flows: no unfeasible cells detected!")
       cat("\n##\n\n")
+      out <- NULL
     }
+
+  return(invisible(out))
 }
 
 
@@ -808,12 +865,18 @@
 
 
 `getMargins` <- function(Obj, P1, P2, B, D, N, F, M, margin) {
-##############################################################
-# This function marginalizes stocks and flows values in Obj  #
-# with respecto to classification variable 'margin'.         #
-#                                                            #
-# NOTE: DBE errors at aggregated level are also reported.    #
-##############################################################
+###############################################################
+# This function marginalizes stocks and flows values in Obj   #
+# with respecto to classification variable 'margin'.          #
+#                                                             #
+# REMARK: Aggregation on margins here *includes convenience   #
+#         values that are absent* from outputs of functions   #
+#         write.ALL (Q) and compare.ALL (Delta). These can    #
+#         sometimes be *NON MEANINGFUL*, e.g. the value of P2 #
+#         for Region == "E" (see function settle.AbroadP2).   # 
+#                                                             #
+# NOTE: DBE errors at aggregated level are also reported.     #
+###############################################################
 
   # Get balanced objects names
   O.names <- names(Obj)

@@ -22,7 +22,7 @@ setwd("G:\\BalanceR\\DBE\\Standard_Input")
 P1 <- read.P(file = "P1.csv")
 
 # Final population counts
-P2 <- read.P(file = "P2.csv")
+P2 <- read.BDN(file = "P2.csv", STOCK = P1)
 
 # Births
 B <- read.BDN(file = "B.csv", STOCK = P1)
@@ -35,7 +35,7 @@ N <- B
 N$N <- B$N - D$N
 
 # (Generalized) Migration Flows
-F <- read.F(file = "F.csv")
+F <- read.F(file = "F.csv", STOCK = P1)
 
 # Structural constraints on (Generalized) Migration Flows
 Cmask <- mkCmask(F)
