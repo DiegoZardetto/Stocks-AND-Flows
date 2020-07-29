@@ -50,7 +50,7 @@ M <- t(F) - F
 # A) The TRADITIONAL approach: settle P1 to *0* (as it already is after the input phase)
 #    and derive P2 accordingly from the DBE 
 P1 <- settle.AbroadP1(P1, setval = 0)
-P2 <- settle.AbroadP2(P2, N, M)
+P2 <- settle.AbroadP2(P2, P1, N, M)
 
 # Free some memory (hopefully)
 gc()

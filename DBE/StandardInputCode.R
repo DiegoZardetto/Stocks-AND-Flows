@@ -401,7 +401,7 @@
 }
 
 
-`settle.AbroadP2` <- function(P2, N, M) {
+`settle.AbroadP2` <- function(P2, P1, N, M) {
 #############################################################################
 # If stocks and flows involve classification variable 'Region', then settle #
 # the *final* abroad population count (i.e. Region = 'E' in P2).            #
@@ -414,6 +414,14 @@
 #                                                                           #
 # NOTE: This way the abroad region enters the equations seamlessly, but it  #
 #       DOES NOT IMPLY ANY BALANCING DISCREPANCY IN ITSELF.                 #
+#                                                                           #
+# NOTE: If P1 has been settled with setval = 0, the overall count for the   #
+#       abroad population, sum(P2[P2$Region == "E", "N"]), equals *minus*   #
+#       the *NET INCREASE* of the country between T1 and T2.                #
+#       This also holds after the balancing process, *PROVIDED NO RESIDUAL  #
+#       DBE DISCREPANCIES STILL EXIST*. Otherwise the equality is only      #
+#       *approximated*, and the offset depends on the size of the overall   #
+#       DBE residual discrepancy.                                           #
 #############################################################################
   if ("Region" %in% names(P2)) {
      P2$N[P2$Region == 'E'] <- P1$N[P2$Region == 'E'] + N$N[P2$Region == 'E'] + rowSums(M)[P2$Region == 'E']
@@ -864,19 +872,31 @@
 ########################################
 
 
-`getMargins` <- function(Obj, P1, P2, B, D, N, F, M, margin) {
-###############################################################
-# This function marginalizes stocks and flows values in Obj   #
-# with respecto to classification variable 'margin'.          #
-#                                                             #
-# REMARK: Aggregation on margins here *includes convenience   #
-#         values that are absent* from outputs of functions   #
-#         write.ALL (Q) and compare.ALL (Delta). These can    #
-#         sometimes be *NON MEANINGFUL*, e.g. the value of P2 #
-#         for Region == "E" (see function settle.AbroadP2).   # 
-#                                                             #
-# NOTE: DBE errors at aggregated level are also reported.     #
-###############################################################
+`getDBEmargins` <- function(Obj, P1, P2, B, D, N, F, M, margin, full = FALSE) {
+###################################################################
+# This function marginalizes stocks and flows values in Obj with  #
+# respect to classification variable 'margin'.                    #
+#                                                                 #
+# NOTE: If margin == "Country" (a special variable created on     #
+#       the fly), then margins are computed w.r.t. the binary     #
+#       variable "I" / "E" (i.e. "domestic" / "abroad").          #
+#                                                                 #
+# NOTE: if    *full = TRUE*                                       #
+#       then: aggregation on margins *includes convenience        #
+#             values that are absent* from outputs of functions   #
+#             write.ALL (Q) and compare.ALL (Delta). These can    #
+#             sometimes be *NON MEANINGFUL*, e.g. the value of P2 #
+#             for Region == "E" (see function settle.AbroadP2).   #
+#       if    *full = FALSE*                                      #
+#       then: aggregation on margins is restricted to meaningful  #
+#             modalities. This is obtained by setting to 0 the    #
+#             counts of non-meaningful cells.                     #
+#                                                                 #
+# NOTE: if    *full = TRUE*                                       #
+#       then: DBE errors at aggregated level are also reported.   #
+#       REMARK: These DBE errors are *ALL* the actual accounting  #
+#               errors, from a mathematical perspective.          #
+###################################################################
 
   # Get balanced objects names
   O.names <- names(Obj)
@@ -895,35 +915,62 @@
 
   # Check margin variable is just one and exists
   if (length(margin) > 1) stop("Please specify just one margin variable!")
-  if (!(margin %in% names(P1)[names(P1) != "N"])) stop("Illicit margin variable!")
+  if (!(margin %in% c(names(P1)[names(P1) != "N"], "Country"))) stop("Illicit margin variable!")
+
+  # Treat the special margin "Country"
+  is.Country <- (margin == "Country")
+  if (is.Country) margin <- "Region"
 
   # Build marginalization formula
   margin.formula <- as.formula(paste("N ~", margin), env = .GlobalEnv)
+
+  # A function to set to 0 counts of unmeaningful modalities. For details,
+  # see function write.ALL()
+  # NOTE: is.B *MUST* be TRUE *ONLY* for BIRTHS 
+  `NoUnmeaningful` <- function(obj, is.B = FALSE) {
+      if ("Region" %in% names(obj)) {
+         obj[obj$Region == "E", "N"] <- 0
+        }
+      if ("AgeCl" %in% names(obj) && is.B ) {
+         obj[obj$AgeCl != "N", "N"] <- 0
+        }
+      return(obj)
+    }
 
   # Build and aggregate DBE terms: P1, P2, B, D, N, F, M
   ## P1
   QP1 <- P1
   QP1$N <- as.numeric(Obj$QCP1)
+  # Full reporting?
+  if (!full) QP1 <- NoUnmeaningful(QP1)
   P1 <- aggregate(margin.formula, data = QP1, FUN = sum)
 
   ## P2
   QP2 <- P2
   QP2$N <- as.numeric(Obj$QCP2)
+  # Full reporting?
+  if (!full) QP2 <- NoUnmeaningful(QP2)
   P2 <- aggregate(margin.formula, data = QP2, FUN = sum)
 
   ## B
   QB <- B
   QB$N <- as.numeric(Obj$QCB)
+  # Full reporting?
+  if (!full) QB <- NoUnmeaningful(QB, is.B = TRUE)
   B <- aggregate(margin.formula, data = QB, FUN = sum)
 
   ## D
   QD <- D
   QD$N <- as.numeric(Obj$QCD)
+  # Full reporting?
+  if (!full) QD <- NoUnmeaningful(QD)
   D <- aggregate(margin.formula, data = QD, FUN = sum)
 
   ## N
   QN <- N
   QN$N <- as.numeric(Obj$QCN)
+  # Full reporting?
+  if (!full) QN <- NoUnmeaningful(QN)
   N <- aggregate(margin.formula, data = QN, FUN = sum)
 
   # Build row and col vars for flat contingency table marginalization
@@ -933,30 +980,118 @@
   ## F
   QF <- Obj$QF * (1 - F + F)
   F <- ftable(QF, row.vars = row.margin, col.vars = col.margin)
-  F <- zapsmall(F)
 
   ## M
-  QM <- Obj$QM * (1 - M + M)
-  M <- ftable(QM, row.vars = row.margin, col.vars = col.margin)
-  M <- zapsmall(M)
+  M <- t(F) - F
 
-  # Compute aggregated DBE errors
-  Err <- P2
-  names(Err)[names(Err) == "N"] <- "P2"
-  Err$P1 <- P1$N
-  Err$N <- N$N
-  Err$rowSumsM <- rowSums(M)
-  Err$ERR <- Err$P2 - Err$P1 - Err$N - Err$rowSumsM
-  Err[, -1] <- zapsmall(as.matrix(Err[, -1]))
 
+  # Treat the special margin "Country"
+  if (is.Country) {
+     # Build marginalization formula
+     margin.formula <- as.formula(paste("N ~", "Country"), env = .GlobalEnv)
+
+     # Build and aggregate DBE terms: P1, P2, B, D, N, F, M
+     ## P1
+     QP1$Country <- factor(ifelse(QP1$Region == "E", "E", "I"), levels = c("I", "E")) 
+     P1 <- aggregate(margin.formula, data = QP1, FUN = sum)
+
+     ## P2
+     QP2$Country <- factor(ifelse(QP2$Region == "E", "E", "I"), levels = c("I", "E")) 
+     P2 <- aggregate(margin.formula, data = QP2, FUN = sum)
+
+     ## B
+     QB$Country <- factor(ifelse(QB$Region == "E", "E", "I"), levels = c("I", "E")) 
+     B <- aggregate(margin.formula, data = QB, FUN = sum)
+
+     ## D
+     QD$Country <- factor(ifelse(QD$Region == "E", "E", "I"), levels = c("I", "E")) 
+     D <- aggregate(margin.formula, data = QD, FUN = sum)
+
+     ## N
+     QN$Country <- factor(ifelse(QN$Region == "E", "E", "I"), levels = c("I", "E")) 
+     N <- aggregate(margin.formula, data = QN, FUN = sum)
+
+     # Build row and col vars for flat contingency table marginalization
+     row.margin <- "Country1"
+     col.margin <- "Country2"
+  
+     ## F
+     F <- as.data.frame(F)
+     F$Country1 <- factor(ifelse(F$Region1 == "E", "E", "I"), levels = c("I", "E"))
+     F$Country2 <- factor(ifelse(F$Region2 == "E", "E", "I"), levels = c("I", "E"))
+     # Expand the migration flows table using the count column 'Freq' in order to later
+     # re-use ftable. NOTE: This is *SLOW*!
+     F <- F[rep(1:nrow(F), F$Freq), names(F) != "Freq"]
+     F <- ftable(F, row.vars = row.margin, col.vars = col.margin)
+
+     ## M
+     M <- t(F) - F
+    }
+
+  # If *full = TRUE* compute aggregated DBE errors
+  if (full) {
+     Err <- P2
+     names(Err)[names(Err) == "N"] <- "P2"
+     Err$P1 <- P1$N
+     Err$N <- N$N
+     Err$rowSumsM <- rowSums(M)
+     Err$ERR <- Err$P2 - Err$P1 - Err$N - Err$rowSumsM
+     # Err[, -1] <- zapsmall(as.matrix(Err[, -1]))
+    }
   # Build output list
+  # F <- zapsmall(F)
+  # M <- zapsmall(M)
   Margins <- list(P1 = P1, P2 = P2, B = B, D = D, N = N, F = F, M = M)
 
-  attr(Margins, "DBEerrors") <- Err
-  attr(Margins, "margin") <- margin
+  if (full) attr(Margins, "DBEerrors") <- Err
+
+  attr(Margins, "margin") <- if (!is.Country) margin else "Country"
   attr(Margins, "is.balanced") <- is.balanced
+  attr(Margins, "is.full") <- full
 
   return(Margins)
+}
+
+
+`diffDBEmargins` <- function(balMargins, rawMargins, percent = TRUE, digits = 2) {
+######################################################
+# Compute the difference between marginalized stocks #
+# and flows.                                         #
+######################################################
+  
+  marginVar.bal <- attr(balMargins, "margin")
+  marginVar.raw <- attr(rawMargins, "margin")
+  if (!identical(marginVar.bal, marginVar.raw)) stop("Input objects margins differ: ", marginVar.bal, " and ", marginVar.raw)
+
+  is.full.bal <- attr(balMargins, "is.full")
+  is.full.raw <- attr(rawMargins, "is.full")
+  if (!identical(is.full.bal, is.full.raw)) stop("Different 'is.full' attributes in input objects!")
+
+  out <- mapply(FUN = function(bal, raw, percent) {
+                         if (class(bal) == "ftable") {
+                             DIFF <- (bal - raw)
+                             if (percent) {
+                                 DIFF <- round(100 * DIFF/raw, digits)
+                                 # Take care of NaN cases: raw = 0 -> bal = 0, which is GOOD!
+                                 DIFF[is.nan(DIFF)] <- 0
+                                }
+                             DIFF <- DIFF * (1 - bal + bal)
+                            } else {
+                             DIFF <- bal
+                             DIFF$N <- bal$N - raw$N
+                             if (percent) {
+                                 DIFF$N <- round(100 * DIFF$N/raw$N, digits)
+                                 # Take care of NaN cases: raw = 0 -> bal = 0, which is GOOD!
+                                 DIFF$N[is.nan(DIFF$N)] <- 0
+                                }
+                            }
+                         return(DIFF)
+                         },
+                balMargins, rawMargins, MoreArgs = list(percent = percent))
+
+  attr(out, "margin") <- marginVar.bal
+  attr(out, "is.full") <- is.full.bal   
+  return(out)
 }
 
 
