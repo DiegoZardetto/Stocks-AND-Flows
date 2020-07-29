@@ -73,8 +73,8 @@ o <- makeObj(P1, P2, B, D, N, F, M)
 # NOTE: If needed (e.g. if varmodel = "poisson-skellam"), choose
 #       how to treat 0 raw counts (by default, M.N.adj.zeros = FALSE)
 # ov <- makeObjV(o, Cmask, varmodel = "poisson")
-# ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE)
-ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE)
+ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE)
+# ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE)
 # ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE, vD = 1, vN = 1)
 # ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE, vP2 = 0, vB = 1, vD = 1, vN = 1)
 
@@ -101,8 +101,8 @@ gc()
 
 # Directory to write standard output data
 # outdir <- "G:\\BalanceR\\DBE\\Standard_Output\\POISSON"
-# outdir <- "G:\\BalanceR\\DBE\\Standard_Output\\POISSON_SKELLAM"
-outdir <- "G:\\BalanceR\\DBE\\Standard_Output\\POISSON_SKELLAM_AdjZeros"
+outdir <- "G:\\BalanceR\\DBE\\Standard_Output\\POISSON_SKELLAM"
+# outdir <- "G:\\BalanceR\\DBE\\Standard_Output\\POISSON_SKELLAM_AdjZeros"
 # outdir <- "G:\\BalanceR\\DBE\\Standard_Output\\DEATHS_POISSON_SKELLAM_AdjZeros"
 # outdir <- "G:\\BalanceR\\DBE\\Standard_Output\\BIRTHS_DEATHS_NO_P2_POISSON_SKELLAM_AdjZeros"
 

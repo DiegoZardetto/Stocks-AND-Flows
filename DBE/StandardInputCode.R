@@ -982,10 +982,13 @@
   F <- ftable(QF, row.vars = row.margin, col.vars = col.margin)
 
   ## M
-  M <- t(F) - F
+  QM <- Obj$QM * (1 - M + M)
+  M <- ftable(QM, row.vars = row.margin, col.vars = col.margin)
 
 
   # Treat the special margin "Country"
+  # !!!!!! FLAWED: for balanced objects yelds an APPROXIMATE value due to unintended rounding !!!!!!
+  # !!!!!! Don't know how to fix this yet !!!!!! DEBUG 29/0/2020
   if (is.Country) {
      # Build marginalization formula
      margin.formula <- as.formula(paste("N ~", "Country"), env = .GlobalEnv)
@@ -1016,6 +1019,7 @@
      col.margin <- "Country2"
   
      ## F
+     ## !!!!!! FLAWED: Freq is NOT INTEGER for balanced flows !!!!!! DEBUG 29/0/2020
      F <- as.data.frame(F)
      F$Country1 <- factor(ifelse(F$Region1 == "E", "E", "I"), levels = c("I", "E"))
      F$Country2 <- factor(ifelse(F$Region2 == "E", "E", "I"), levels = c("I", "E"))
@@ -1025,6 +1029,13 @@
      F <- ftable(F, row.vars = row.margin, col.vars = col.margin)
 
      ## M
+     ## REMARK: Here I'm assuming Obj$M = t(Obj$F) - Obj$F, which is TRUE
+     ##         by construction when Obj is raw. If Obj is balanced, at least
+     ##         theoretically the identity might *not hold*, in that the balancing
+     ##         algorithm might have not converged.
+     if (is.balanced) {
+         if (!isTRUE(all.equal(Obj$QM, t(Obj$QF) - Obj$QF))) warning("Hmm... seems M = t(F) - F does not hold exactly!") 
+        }
      M <- t(F) - F
     }
 
@@ -1337,3 +1348,36 @@
   return(out)
 }
 
+
+
+
+##################################
+# D I A G N O S T I C  P L O T S #
+##################################
+
+
+
+
+deltasDensity <- function(Delta) {
+#########################################################
+# Density plots of Stock and Flows Relative Adjustments #
+#########################################################
+  P2.density <- with(Delta$DeltaP2, density(log10(100* abs(Nbal - N)[abs(Nbal - N) > 0] / (N[abs(Nbal - N) > 0]) ) ) )
+  F.density  <- with(Delta$DeltaF,  density(log10(100* abs(Nbal - N)[abs(Nbal - N) > 0] / (N[abs(Nbal - N) > 0]) ) ) )
+  M.density  <- with(Delta$DeltaM,  density(log10(100* abs(Nbal - N)[abs(Nbal - N) > 0] / (abs(N)[abs(Nbal - N) > 0]) ) ) )
+  xlim <- range(P2.density$x, F.density$x, M.density$x)
+  ylim <- range(P2.density$y, F.density$y, M.density$y)
+  plot(P2.density, col = "blue", xlim = xlim, ylim = ylim, xlab = "log10( 100 * abs(Nbal - N) / abs(N) )", main = "Percent Adjustments of Micro-level Stocks and Flows")
+  points(F.density, col = "red", type = "l")
+  points(M.density, col = "green", type = "l")
+  txt.P2 <- paste("P2: mean = ", with(Delta$DeltaP2, round(mean(N[abs(Nbal - N) > 0]))),
+                  ", median = ", with(Delta$DeltaP2, round(median(N[abs(Nbal - N) > 0]))),
+                  ", n.adj = ", P2.density$n, sep = "")
+  txt.F  <- paste("F: mean = ", with(Delta$DeltaF, round(mean(N[abs(Nbal - N) > 0]))),
+                  ", median = ", with(Delta$DeltaF, round(median(N[abs(Nbal - N) > 0]))),
+                  ", n.adj = ", F.density$n, sep = "")
+  txt.M  <- paste("M: mean.abs = ", with(Delta$DeltaM, round(mean(abs(N)[abs(Nbal - N) > 0]))),
+                  ", median.abs = ", with(Delta$DeltaM, round(median(abs(N)[abs(Nbal - N) > 0]))),
+                  ", n.adj = ", M.density$n, sep = "")
+  legend("topleft", legend = c(txt.P2, txt.F, txt.M), col = c("blue", "red", "green"), lty = rep(1,3), bty = "n")
+}
