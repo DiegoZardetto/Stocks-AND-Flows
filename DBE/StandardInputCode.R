@@ -872,14 +872,15 @@
 ########################################
 
 
-`getDBEmargins` <- function(Obj, P1, P2, B, D, N, F, M, margin, full = FALSE) {
+`getDBEmargins` <- function(Obj, P1, P2, B, D, N, F, M, margins, full = FALSE) {
 ###################################################################
 # This function marginalizes stocks and flows values in Obj with  #
-# respect to classification variable 'margin'.                    #
+# respect to classification variables 'margins'.                  #
 #                                                                 #
-# NOTE: If margin == "Country" (a special variable created on     #
-#       the fly), then margins are computed w.r.t. the binary     #
-#       variable "I" / "E" (i.e. "domestic" / "abroad").          #
+# NOTE: The margins character vector can include any variable     #
+#       appearing in stocks and flows + "Country", a *special*    #
+#       binary variable *created on the fly* with modalities:     #
+#       "I" (i.e. "domestic") / "E" (i.e. "abroad").              #
 #                                                                 #
 # NOTE: if    *full = TRUE*                                       #
 #       then: aggregation on margins *includes convenience        #
@@ -913,16 +914,25 @@
      names(Obj) <- paste("Q", O.names, sep = "")
     }
 
-  # Check margin variable is just one and exists
-  if (length(margin) > 1) stop("Please specify just one margin variable!")
-  if (!(margin %in% c(names(P1)[names(P1) != "N"], "Country"))) stop("Illicit margin variable!")
+  # Check margin variables exist
+  margins <- unique(margins)
+  # Save "original" margins for later use
+  in.margins <- margins
+  if (!all(margins %in% c(names(P1)[names(P1) != "N"], "Country"))) stop("Illicit margin variables!")
 
   # Treat the special margin "Country"
-  is.Country <- (margin == "Country")
-  if (is.Country) margin <- "Region"
+  is.Country <- any(margins == "Country")
+  if (is.Country) {
+     # Use "Region" as a temporary place-holder for "Country"
+     which.is.Country <- which(margins == "Country")
+     margins[which.is.Country] <- "Region"
+     margins <- unique(margins)
+    }
 
   # Build marginalization formula
-  margin.formula <- as.formula(paste("N ~", margin), env = .GlobalEnv)
+  # NOTE: Function rev() below is to match the 'RIGHTMOST VARIES FASTER'
+  #       reporting convention (like read.P(), read.BDN() and read.F() do)  
+  margins.formula <- as.formula(paste("N ~ ", paste(rev(margins), collapse = " + "), sep = ""), env = .GlobalEnv)
 
   # A function to set to 0 counts of unmeaningful modalities. For details,
   # see function write.ALL()
@@ -943,100 +953,118 @@
   QP1$N <- as.numeric(Obj$QCP1)
   # Full reporting?
   if (!full) QP1 <- NoUnmeaningful(QP1)
-  P1 <- aggregate(margin.formula, data = QP1, FUN = sum)
+  P1 <- aggregate(margins.formula, data = QP1, FUN = sum)
+  # Order columns according to margins: this will match FLOWS rows ordering
+  P1 <- P1[, c(margins, "N")]
 
   ## P2
   QP2 <- P2
   QP2$N <- as.numeric(Obj$QCP2)
   # Full reporting?
   if (!full) QP2 <- NoUnmeaningful(QP2)
-  P2 <- aggregate(margin.formula, data = QP2, FUN = sum)
+  P2 <- aggregate(margins.formula, data = QP2, FUN = sum)
+  # Order columns according to margins: this will match FLOWS rows ordering
+  P2 <- P2[, c(margins, "N")]
 
   ## B
   QB <- B
   QB$N <- as.numeric(Obj$QCB)
   # Full reporting?
   if (!full) QB <- NoUnmeaningful(QB, is.B = TRUE)
-  B <- aggregate(margin.formula, data = QB, FUN = sum)
+  B <- aggregate(margins.formula, data = QB, FUN = sum)
+  # Order columns according to margins: this will match FLOWS rows ordering
+  B <- B[, c(margins, "N")]
 
   ## D
   QD <- D
   QD$N <- as.numeric(Obj$QCD)
   # Full reporting?
   if (!full) QD <- NoUnmeaningful(QD)
-  D <- aggregate(margin.formula, data = QD, FUN = sum)
+  D <- aggregate(margins.formula, data = QD, FUN = sum)
+  # Order columns according to margins: this will match FLOWS rows ordering
+  D <- D[, c(margins, "N")]
 
   ## N
   QN <- N
   QN$N <- as.numeric(Obj$QCN)
   # Full reporting?
   if (!full) QN <- NoUnmeaningful(QN)
-  N <- aggregate(margin.formula, data = QN, FUN = sum)
+  N <- aggregate(margins.formula, data = QN, FUN = sum)
+  # Order columns according to margins: this will match FLOWS rows ordering
+  N <- N[, c(margins, "N")]
 
   # Build row and col vars for flat contingency table marginalization
-  row.margin <- paste(margin, "1", sep = "")
-  col.margin <- paste(margin, "2", sep = "")
+  row.margins <- paste(margins, "1", sep = "")
+  col.margins <- paste(margins, "2", sep = "")
   
   ## F
   QF <- Obj$QF * (1 - F + F)
-  F <- ftable(QF, row.vars = row.margin, col.vars = col.margin)
+  F <- ftable(QF, row.vars = row.margins, col.vars = col.margins)
 
   ## M
   QM <- Obj$QM * (1 - M + M)
-  M <- ftable(QM, row.vars = row.margin, col.vars = col.margin)
+  M <- ftable(QM, row.vars = row.margins, col.vars = col.margins)
 
 
-  # Treat the special margin "Country"
-  # !!!!!! FLAWED: for balanced objects yelds an APPROXIMATE value due to unintended rounding !!!!!!
-  # !!!!!! Don't know how to fix this yet !!!!!! DEBUG 29/0/2020
+  # Treat the special margins "Country"
+  # NOTE: Will take advantage of already computed STOCKS and FLOWS marginalized
+  #       w.r.t. "Region" as a place-holder for "Country"
   if (is.Country) {
-     # Build marginalization formula
-     margin.formula <- as.formula(paste("N ~", "Country"), env = .GlobalEnv)
+     # Re-build marginalization formula
+     margins.formula <- as.formula(paste("N ~ ", paste(rev(in.margins), collapse = " + "), sep = ""), env = .GlobalEnv)
 
      # Build and aggregate DBE terms: P1, P2, B, D, N, F, M
      ## P1
-     QP1$Country <- factor(ifelse(QP1$Region == "E", "E", "I"), levels = c("I", "E")) 
-     P1 <- aggregate(margin.formula, data = QP1, FUN = sum)
+     P1$Country <- factor(ifelse(P1$Region == "E", "E", "I"), levels = c("I", "E")) 
+     P1 <- aggregate(margins.formula, data = P1, FUN = sum)
+     # Order columns according to margins: this will match FLOWS rows ordering
+     P1 <- P1[, c(in.margins, "N")]
 
      ## P2
-     QP2$Country <- factor(ifelse(QP2$Region == "E", "E", "I"), levels = c("I", "E")) 
-     P2 <- aggregate(margin.formula, data = QP2, FUN = sum)
+     P2$Country <- factor(ifelse(P2$Region == "E", "E", "I"), levels = c("I", "E")) 
+     P2 <- aggregate(margins.formula, data = P2, FUN = sum)
+     # Order columns according to margins: this will match FLOWS rows ordering
+     P2 <- P2[, c(in.margins, "N")]
 
      ## B
-     QB$Country <- factor(ifelse(QB$Region == "E", "E", "I"), levels = c("I", "E")) 
-     B <- aggregate(margin.formula, data = QB, FUN = sum)
+     B$Country <- factor(ifelse(B$Region == "E", "E", "I"), levels = c("I", "E")) 
+     B <- aggregate(margins.formula, data = B, FUN = sum)
+     # Order columns according to margins: this will match FLOWS rows ordering
+     B <- B[, c(in.margins, "N")]
 
      ## D
-     QD$Country <- factor(ifelse(QD$Region == "E", "E", "I"), levels = c("I", "E")) 
-     D <- aggregate(margin.formula, data = QD, FUN = sum)
+     D$Country <- factor(ifelse(D$Region == "E", "E", "I"), levels = c("I", "E")) 
+     D <- aggregate(margins.formula, data = D, FUN = sum)
+     # Order columns according to margins: this will match FLOWS rows ordering
+     D <- D[, c(in.margins, "N")]
 
      ## N
-     QN$Country <- factor(ifelse(QN$Region == "E", "E", "I"), levels = c("I", "E")) 
-     N <- aggregate(margin.formula, data = QN, FUN = sum)
+     N$Country <- factor(ifelse(N$Region == "E", "E", "I"), levels = c("I", "E")) 
+     N <- aggregate(margins.formula, data = N, FUN = sum)
+     # Order columns according to margins: this will match FLOWS rows ordering
+     N <- N[, c(in.margins, "N")]
 
      # Build row and col vars for flat contingency table marginalization
-     row.margin <- "Country1"
-     col.margin <- "Country2"
+     row.margins <- paste(in.margins, "1", sep = "")
+     col.margins <- paste(in.margins, "2", sep = "")
   
      ## F
-     ## !!!!!! FLAWED: Freq is NOT INTEGER for balanced flows !!!!!! DEBUG 29/0/2020
      F <- as.data.frame(F)
      F$Country1 <- factor(ifelse(F$Region1 == "E", "E", "I"), levels = c("I", "E"))
      F$Country2 <- factor(ifelse(F$Region2 == "E", "E", "I"), levels = c("I", "E"))
-     # Expand the migration flows table using the count column 'Freq' in order to later
-     # re-use ftable. NOTE: This is *SLOW*!
-     F <- F[rep(1:nrow(F), F$Freq), names(F) != "Freq"]
-     F <- ftable(F, row.vars = row.margin, col.vars = col.margin)
+     # Compute the migration flows table using the count column 'Freq' in order to later
+     # use ftable. NOTE: This is *SLOW*!
+     F <- xtabs(as.formula("Freq ~ .", env = .GlobalEnv), data = F)
+     F <- ftable(F, row.vars = row.margins, col.vars = col.margins)
 
      ## M
-     ## REMARK: Here I'm assuming Obj$M = t(Obj$F) - Obj$F, which is TRUE
-     ##         by construction when Obj is raw. If Obj is balanced, at least
-     ##         theoretically the identity might *not hold*, in that the balancing
-     ##         algorithm might have not converged.
-     if (is.balanced) {
-         if (!isTRUE(all.equal(Obj$QM, t(Obj$QF) - Obj$QF))) warning("Hmm... seems M = t(F) - F does not hold exactly!") 
-        }
-     M <- t(F) - F
+     M <- as.data.frame(M)
+     M$Country1 <- factor(ifelse(M$Region1 == "E", "E", "I"), levels = c("I", "E"))
+     M$Country2 <- factor(ifelse(M$Region2 == "E", "E", "I"), levels = c("I", "E"))
+     # Compute the migration flows table using the count column 'Freq' in order to later
+     # use ftable. NOTE: This is *SLOW*!
+     M <- xtabs(as.formula("Freq ~ .", env = .GlobalEnv), data = M)
+     M <- ftable(M, row.vars = row.margins, col.vars = col.margins)
     }
 
   # If *full = TRUE* compute aggregated DBE errors
@@ -1050,13 +1078,13 @@
      # Err[, -1] <- zapsmall(as.matrix(Err[, -1]))
     }
   # Build output list
-  # F <- zapsmall(F)
-  # M <- zapsmall(M)
+  F <- zapsmall(F)
+  M <- zapsmall(M)
   Margins <- list(P1 = P1, P2 = P2, B = B, D = D, N = N, F = F, M = M)
 
   if (full) attr(Margins, "DBEerrors") <- Err
 
-  attr(Margins, "margin") <- if (!is.Country) margin else "Country"
+  attr(Margins, "margins") <- in.margins
   attr(Margins, "is.balanced") <- is.balanced
   attr(Margins, "is.full") <- full
 
