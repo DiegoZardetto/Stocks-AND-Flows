@@ -109,11 +109,6 @@
      BDN$AgeCl <- relevel(BDN$AgeCl, "N")
     }
 
-#  # Tidy up the levels of stockSchema's factors
-#  for (fact in stockSchema) {
-#     BDN[[fact]] <- factor(BDN[[fact]], levels = tidyLevels(BDN[[fact]]))
-#    }
-
   # Tidy up the levels of stockSchema's factors. Try ensure the congruence
   # of BIRTHS / DEATHS / NATURAL INCREASE matrices with STOCKS matrices
   # NOTE: Code below implies that:
@@ -201,11 +196,6 @@
      levels(Fin$AgeCl2) <- c(levels(Fin$AgeCl2), "N")
      Fin$AgeCl2 <- relevel(Fin$AgeCl2, "N")
     }
-
-#  # Tidy up the levels of flowSchema's factors
-#  for (fact in flowSchema) {
-#     Fin[[fact]] <- factor(Fin[[fact]], levels = tidyLevels(Fin[[fact]]))
-#    }
 
   # Tidy up the levels of flowSchema's factors. Try ensure the congruence
   # of FLOWS matrices with STOCKS matrices
@@ -1095,7 +1085,7 @@
 `diffDBEmargins` <- function(balMargins, rawMargins, percent = TRUE, digits = 2) {
 ######################################################
 # Compute the difference between marginalized stocks #
-# and flows.                                         #
+# and flows (either simple or percent).              #
 ######################################################
   
   marginVar.bal <- attr(balMargins, "margin")
@@ -1250,6 +1240,10 @@
 }
 
 `print.DBEerrors` <- function(x, ...) {
+#######################################
+# Print method for DBE errors.        #
+#######################################
+
   nDBEs <- attr(x, "nDBEs")
   tol <- attr(x, "tol")
   nDBEs.KO <- attr(x, "nDBEs.KO")
@@ -1322,6 +1316,9 @@
 #               = P1_1 +     N_i     + SUM_j(    M_ij   )                         #
 #                                                                                 #
 # are returned.                                                                   #
+#                                                                                 #
+# NOTE: Currently only works for *maximal* stock- and flow-schemas: *all*         #
+#       classification variables must be present in input data.                   #
 #                                                                                 #
 # NOTE: Delta must be the output of comparison function compare.ALL()             #
 #                                                                                 #
