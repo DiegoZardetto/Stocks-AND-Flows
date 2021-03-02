@@ -22,16 +22,16 @@ source("G:\\BalanceR\\DBE\\StandardInputCode.R")
 setwd("G:\\BalanceR\\DBE\\Standard_Input")
 
 # Initial population counts
-P1 <- read.P(file = "P1.csv")
+P1 <- read.P1(file = "P1.csv")
 
 # Final population counts
-P2 <- read.BDN(file = "P2.csv", STOCK = P1)
+P2 <- read.P2BD(file = "P2.csv", STOCK = P1)
 
 # Births
-B <- read.BDN(file = "B.csv", STOCK = P1)
+B <- read.P2BD(file = "B.csv", STOCK = P1)
 
 # Deaths
-D <- read.BDN(file = "D.csv", STOCK = P1)
+D <- read.P2BD(file = "D.csv", STOCK = P1)
 
 # Deduce Natural Increase N = B - D
 N <- B
@@ -41,10 +41,10 @@ N$N <- B$N - D$N
 F <- read.F(file = "F.csv", STOCK = P1)
 
 # Structural constraints on (Generalized) Migration Flows
-Cmask <- mkCmask(F)
+FCmask <- mkFCmask(F)
 
 # Test structural constraints on the (Generalized) Migration Flows Matrix
-mkCheck(F, Cmask)
+mkFCheck(F, FCmask)
 
 # Deduce the Net (Generalized) Migration Flows Matrix
 M <- t(F) - F
@@ -78,12 +78,12 @@ o <- makeObj(P1, P2, B, D, N, F, M)
 
 # NOTE: If needed (e.g. if varmodel = "poisson-skellam"), choose
 #       how to treat 0 raw counts (by default, M.N.adj.zeros = FALSE)
-# ov <- makeObjV(o, Cmask, varmodel = "poisson")
-# ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE)
-ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE)
-# ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE, vD = 1, vN = 1)
-# ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE, vP2 = 0, vB = 1, vD = 1, vN = 1)
-# ov <- makeObjV(o, Cmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE, vP2 = 0)
+# ov <- makeObjV(o, FCmask, varmodel = "poisson")
+# ov <- makeObjV(o, FCmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE)
+ov <- makeObjV(o, FCmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE)
+# ov <- makeObjV(o, FCmask, varmodel = "poisson-skellam", M.N.adj.zeros = TRUE, vD = 1, vN = 1)
+# ov <- makeObjV(o, FCmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE, vP2 = 0, vB = 1, vD = 1, vN = 1)
+# ov <- makeObjV(o, FCmask, varmodel = "poisson-skellam", M.N.adj.zeros = FALSE, vP2 = 0)
 
 # Read the balancing constraints
 bc <- read.BalConstr(file = "G:\\BalanceR\\DBE\\DBEbalconstr.txt")

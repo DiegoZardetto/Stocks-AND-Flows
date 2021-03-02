@@ -2,10 +2,10 @@
 # S T A N D A R D    I N P U T #
 ################################
 
-`read.P` <- function(file = if (interactive()) choose.files(caption = "Select POPULATION STOCKS file", multi = FALSE, filters = Filters["All", ]),
+`read.P1` <- function(file = if (interactive()) choose.files(caption = "Select T1 POPULATION STOCKS file", multi = FALSE, filters = Filters["All", ]),
                      sep = ";", dec = '.', ...) {
 ##########################################################################
-# Read input POPULATION COUNTS from external files and prepare them.     #
+# Read input T1 POPULATION COUNTS from external files and prepare them.  #
 #                                                                        #
 # NOTE: Input data are assumed to comply with the STANDARD INPUT FORMAT. #
 #                                                                        #
@@ -21,7 +21,7 @@
   # If there are unknown variables, raise an error
   unknown.vars <- names(P)[!(names(P) %in% names(stockClasses))]
   if (length(unknown.vars) > 0) {
-     stop("Unknown variables in POPULATION STOCKS file: ", paste(unknown.vars, collapse = ", "), ".\n")
+     stop("Unknown variables in T1 POPULATION STOCKS file: ", paste(unknown.vars, collapse = ", "), ".\n")
     }
 
   # Reduce the stockSchema to the REALIZED one
@@ -59,16 +59,28 @@
   # IF NEEDED, put to 0 all the counts when AgeCl1 = 'N' or Region1 = 'E'
   P$N[is.na(P$N)] <- 0
 
+  # IF NEEDED, check that T1 counts of 'newborns' (i.e. AgeCl level 'N') are all zeros
+  if ("AgeCl" %in% stockSchema) {
+     if ( any( P$N[P$AgeCl == "N"] != 0 ) ) {
+         stop("Found non-zero newborns' counts in T1 POPULATION STOCKS file: this cannot happen!\n")
+        }
+    }
+
+  # Check that all counts are non-negative
+  if ( any( P$N < 0 ) ) {
+     stop("Found negative counts in T1 POPULATION STOCKS file: this cannot happen!\n")
+    }
+
   # Return the prepared object
   return(P)
 }
 
 
-`read.BDN` <- function(file = if (interactive()) choose.files(caption = "Select BIRTHS / DEATHS / NATURAL INCREASE file", multi = FALSE, filters = Filters["All", ]),
+`read.P2BD` <- function(file = if (interactive()) choose.files(caption = "Select T2 POPULATION STOCKS / BIRTHS / DEATHS file", multi = FALSE, filters = Filters["All", ]),
                        sep = ";", dec = '.', STOCK, ...) {
 #############################################################################
-# Read input BIRTHS / DEATHS / NATURAL INCREASE figures from external files #
-# and prepare them.                                                         #
+# Read input T2 POPULATION STOCKS / BIRTHS / DEATHS figures from external   #
+# files and prepare them.                                                   #
 #                                                                           #
 # NOTE: Input data are assumed to comply with the STANDARD INPUT FORMAT.    #
 #                                                                           #
@@ -77,8 +89,8 @@
 # NOTE: STOCK must be an already prepared POPULATION COUNTS object.         #
 #       It serves the purpose to guarantee stocks-flows FORMAT consistency. #
 #                                                                           #
-# REMARK: This function may *and should* be used to read T2 (T1) POPULATION #
-#         COUNTS while using for argument STOCK already prepared T1 (T2)    #
+# REMARK: This function *must* be used to read T2 POPULATION COUNTS while   #
+#         using for argument STOCK the already prepared object storing T1   #
 #         POPULATION COUNTS. This would ensure P1 <-> P2 congruence!        #
 #############################################################################
   # Set the MAXIMAL schema for POPULATION STOCKS
@@ -86,42 +98,42 @@
   stockSchema <- names(stockClasses)[stockClasses == "factor"]
 
   # First read the data, then prepare it
-  BDN <- suppressWarnings(read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = stockClasses, ...))
+  P2BD <- suppressWarnings(read.table(file, sep = sep, dec = dec, head = TRUE, colClasses = stockClasses, ...))
 
   # If there are unknown variables, raise an error
-  unknown.vars <- names(BDN)[!(names(BDN) %in% names(stockClasses))]
+  unknown.vars <- names(P2BD)[!(names(P2BD) %in% names(stockClasses))]
   if (length(unknown.vars) > 0) {
-     stop("Unknown variables in BIRTHS / DEATHS / NATURAL INCREASE file: ", paste(unknown.vars, collapse = ", "), ".\n")
+     stop("Unknown variables in T2 POPULATION STOCKS / BIRTHS / DEATHS file: ", paste(unknown.vars, collapse = ", "), ".\n")
     }
 
   # Reduce the stockSchema to the REALIZED one
-  stockSchema <- stockSchema[stockSchema %in% names(BDN)]
+  stockSchema <- stockSchema[stockSchema %in% names(P2BD)]
 
   # IF NEEDED, add 'abroad' level 'E' to Region (it will be the LAST level, as
   # according to the STANDARD INPUT FORMAT Region's levels are integers 1, ..., k)
   if ("Region" %in% stockSchema) {
-     levels(BDN$Region) <- c(levels(BDN$Region), "E")
+     levels(P2BD$Region) <- c(levels(P2BD$Region), "E")
     }
 
   # IF NEEDED, add 'newborn' level 'N' to AgeCl, and set it as the FIRST level
   if ("AgeCl" %in% stockSchema) {
-     levels(BDN$AgeCl) <- c(levels(BDN$AgeCl), "N")
-     BDN$AgeCl <- relevel(BDN$AgeCl, "N")
+     levels(P2BD$AgeCl) <- c(levels(P2BD$AgeCl), "N")
+     P2BD$AgeCl <- relevel(P2BD$AgeCl, "N")
     }
 
   # Tidy up the levels of stockSchema's factors. Try ensure the congruence
-  # of BIRTHS / DEATHS / NATURAL INCREASE matrices with STOCKS matrices
+  # of T2 POPULATION STOCKS / BIRTHS / DEATHS matrices with STOCKS matrices
   # NOTE: Code below implies that:
   #       (i)  factor combinations that are possibly *absent* in input will
-  #            appear as zero frequency cells *present* in output object BDN,
+  #            appear as zero frequency cells *present* in output object P2BD,
   #            which is *correct*.
   #       (ii) factor combinations that are *present* in input but possibly *absent*
-  #            in STOCK would appear as *extra rows* in output object BDN,
+  #            in STOCK would appear as *extra rows* in output object P2BD,
   #            which triggers a *preventive informative error message*.
   for (fact in stockSchema) {
-     BDN[[fact]] <- factor(BDN[[fact]], levels = levels(STOCK[[fact]]))
-     if (anyNA(BDN[[fact]])) {
-         stop("Found NA values in input BIRTHS / DEATHS / NATURAL INCREASE file's factor: ", fact,
+     P2BD[[fact]] <- factor(P2BD[[fact]], levels = levels(STOCK[[fact]]))
+     if (anyNA(P2BD[[fact]])) {
+         stop("Found NA values in input T2 POPULATION STOCKS / BIRTHS / DEATHS file's factor: ", fact,
               "\n  NOTE: This might indicate that the input file involves levels which are absent in STOCK!")
         }
     }
@@ -129,27 +141,33 @@
   # Get from STOCK the stockSchemaRows, i.e. ALL the needed rows including empty levels
   stockSchemaRows <- STOCK[, stockSchema, drop = FALSE]
 
-  # Merge BDN with stockSchemaRows (note that this does NOT preserve FACTOR ordering, in general)
-  # REMARK: As (i)  stockSchemaRows and BDN have only common factors, and
-  #            (ii) stockSchemaRows comes first in merge(), THE COLUMNS OF BDN WILL APPEAR
+  # Merge P2BD with stockSchemaRows (note that this does NOT preserve FACTOR ordering, in general)
+  # REMARK: As (i)  stockSchemaRows and P2BD have only common factors, and
+  #            (ii) stockSchemaRows comes first in merge(), THE COLUMNS OF P2BD WILL APPEAR
   #         IN THE SAME ORDER AS THEY APPEAR IN stockSchema
-  BDN <- merge(stockSchemaRows, BDN, all = TRUE)
+  P2BD <- merge(stockSchemaRows, P2BD, all = TRUE)
 
-  # Order the rows of BDN so that the RIGHTMOST variable varies FASTER
-  BDN <- BDN[do.call(order, BDN[, stockSchema, drop = FALSE]), ]
+  # Order the rows of P2BD so that the RIGHTMOST variable varies FASTER
+  P2BD <- P2BD[do.call(order, P2BD[, stockSchema, drop = FALSE]), ]
 
   # IF NEEDED, put to 0 all the counts when AgeCl1 = 'N' or Region1 = 'E'
-  BDN$N[is.na(BDN$N)] <- 0
+  P2BD$N[is.na(P2BD$N)] <- 0
 
-  # Check for possible dimension mismatches between BDN output and input STOCK matrix
+  # Check that all counts are non-negative
+  if ( any( P2BD$N < 0 ) ) {
+     stop("Found negative counts in T2 POPULATION STOCKS / BIRTHS / DEATHS file: this cannot happen!\n")
+    }
+
+  # Check for possible dimension mismatches between P2BD output and input STOCK matrix
   # NOTE: This error should *never* pop-up, as it should have already been catched above,
   #       when tidying up flowSchema's factors
-  if ( NROW(STOCK) != NROW(BDN) ) {
-     stop("Number of rows of BIRTHS / DEATHS / NATURAL INCREASE matrix (", NROW(BDN), ") does not agree with STOCK's one (", NROW(STOCK), ")!")
+  # NOTE: Actually can happen if *duplicated* rows exist (even with different counts)
+  if ( NROW(STOCK) != NROW(P2BD) ) {
+     stop("Number of rows of T2 POPULATION STOCKS / BIRTHS / DEATHS matrix (", NROW(P2BD), ") does not agree with STOCK's one (", NROW(STOCK), ")!")
     }
 
   # Return the prepared object
-  return(BDN)
+  return(P2BD)
 }
 
 
@@ -214,6 +232,11 @@
         }
     }
 
+  # Check that all counts are non-negative
+  if ( any( Fin$N < 0 ) ) {
+     stop("Found negative counts in MIGRATION FLOWS file: this cannot happen!\n")
+    }
+
   # Expand the migration flows table using the count column 'N' in order to later
   # use ftable
   FFin <- Fin[rep(1:nrow(Fin), Fin$N), names(Fin) != "N"]
@@ -221,7 +244,7 @@
   # Compute the flat contingency table
   # REMARK: ftable() creates combinations of factor levels in such a way that the levels
   #         of the left-most variable vary the slowest. THIS MATCHES THE STANDARD ORDER
-  #         created by functions read.P() and read.BDN().
+  #         created by functions read.P1() and read.P2BD().
   F <- ftable(FFin, row.vars = names(FFin)[endsWith(names(FFin), "1")],
                     col.vars = names(FFin)[endsWith(names(FFin), "2")], exclude = NULL)
 
@@ -286,7 +309,7 @@
 }
 
 
-`mkCmask` <- function(F, print = FALSE) {
+`mkFCmask` <- function(F, print = FALSE) {
 ################################################################################
 # Given a Migration Flows Matrix 'F', build its STRUCTURAL CONSTRAINTS mask,   #
 # namely a flat contingency table of the same dimensions whose cell values     #
@@ -342,12 +365,12 @@
 }
 
 
-`mkCheck` <- function(F, Cmask, verbose = TRUE) {
+`mkFCheck` <- function(F, FCmask, verbose = TRUE) {
 ################################################
 # CHECK that Migration Flows data are FEASIBLE #
 ################################################
 
-  TEST <- F * Cmask
+  TEST <- F * FCmask
   UNF <- (TEST > 0)
   NUNF <- sum(UNF)
   if (NUNF > 0) {
@@ -471,7 +494,7 @@
     }
 
 
-`makeObjV` <- function(obj, Cmask, varmodel = c("poisson", "poisson-skellam", "homoskedastic"), M.N.adj.zeros = FALSE,
+`makeObjV` <- function(obj, FCmask, varmodel = c("poisson", "poisson-skellam", "homoskedastic"), M.N.adj.zeros = FALSE,
                        vP2 = 1, vF = 1, vM = 1, vP1 = 0, vB = 0, vD = 0, vN = 0) {
 ##########################################################################################
 # This functions builds variance matrices for the objects to be balanced.                #
@@ -525,7 +548,7 @@
 ##########################################################################################
 
   schema <- attr(obj, "schema")
-  Cmask  <- as.matrix(Cmask); dimnames(Cmask) <- NULL
+  FCmask  <- as.matrix(FCmask); dimnames(FCmask) <- NULL
   varmodel <- match.arg(varmodel)
 
 # Update obj to set variances
@@ -592,7 +615,7 @@
     } else {
      obj$F <- abs(sign(obj$F)) * vF
     }
-   obj$F <- obj$F * (1 - Cmask)
+   obj$F <- obj$F * (1 - FCmask)
    diag(obj$F) <- 0
 ## M
    if (varmodel == "poisson") {
@@ -673,7 +696,7 @@
 # REMARK: The purpose of this function is reporting. For parsimony, output   #
 #         objects are built keeping only meaningful modalities.              #
 #         Therefore output objects will *not* be congruent with their input  #
-#         counterparts (as returned by read.P(), read.BDN() and read.F()).   #
+#         counterparts (as returned by read.P1(), read.P2BD() and read.F()). #
 ##############################################################################
 
   # Get balanced objects names
@@ -794,8 +817,8 @@
 # REMARK: The purpose of this function is reporting. For parsimony,    #
 #         output objects are built keeping only meaningful modalities. #
 #         Therefore output objects will *not* be congruent with their  #
-#         input counterparts (as returned by read.P(), read.BDN() and  #
-#         read.F()).                                                   #
+#         input counterparts (as returned by read.P1(), read.P2BD()    #
+#         and read.F()).                                               #
 ########################################################################
 
   # Is BalObj balanced or not?
@@ -921,7 +944,7 @@
 
   # Build marginalization formula
   # NOTE: Function rev() below is to match the 'RIGHTMOST VARIES FASTER'
-  #       reporting convention (like read.P(), read.BDN() and read.F() do)  
+  #       reporting convention (like read.P1(), read.P2BD() and read.F() do)  
   margins.formula <- as.formula(paste("N ~ ", paste(rev(margins), collapse = " + "), sep = ""), env = .GlobalEnv)
 
   # A function to set to 0 counts of unmeaningful modalities. For details,
