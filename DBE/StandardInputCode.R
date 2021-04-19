@@ -402,6 +402,10 @@
 #                                                                           #
 # NOTE: By default 'setval' is set to 0. A viable alternative would be to   #
 #       set it to a *very large* value, like 1E12.                          #
+#       REMARK: As compared to the default (i.e. setval = 0), setting       #
+#               setval = 1E12 will result in allowing the balancing process #
+#               to change a bit more the *NET INCREASE* of the country      #
+#               between T1 and T2.                                          #
 #                                                                           #
 # NOTE: By properly settling also P2, the abroad region will enter the      #
 #       equations seamlessly, but it WILL NOT IMPLY ANY BALANCING           #
@@ -779,7 +783,7 @@
 
        # Order according to factors
        obj.factors <- names(obj)[names(obj) != "N"]
-       obj <- obj[do.call(order, obj[, obj.factors]), ]
+       obj <- obj[do.call(order, obj[, obj.factors, drop = FALSE]), ]
 
        # NO NEED to restrict to the meaningful modalities: non-zero counts
        # can only arise from meaningful flows!
@@ -851,7 +855,7 @@
      O.Q$Nbal[is.na(O.Q$Nbal)] <- 0
      # Order according to factors
      O.Q.factors <- names(O.Q)[!(names(O.Q) %in% c("N", "Nbal"))]
-     O.Q <- O.Q[do.call(order, O.Q[, O.Q.factors]), ]
+     O.Q <- O.Q[do.call(order, O.Q[, O.Q.factors, drop = FALSE]), ]
      rownames(O.Q) <- NULL
      return(O.Q)
     }
